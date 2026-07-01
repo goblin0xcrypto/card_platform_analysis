@@ -1,0 +1,122 @@
+# 平台分析設定檔 — phygitals
+# 由 new-platform skill 流程（前端 bundle 反查 + Solana 上鏈驗證）填寫，2026-06-16。
+# ⚠️ 標記者為未經鏈上完全確認、待人工複核之欄位。
+
+platform: phygitals               # Phygitals — Solana 上的「實體卡 RWA」卡包/市場（PSA/Fanatics/Alt 託管，官網 https://www.phygitals.com/）
+chain: solana                     # Solana 主網（唯一可確認的活躍鏈）；地址為 base58，非 0x
+                                  # 註：前端 bundle 另有 Arbitrum / AnimeChain(id 69000) 的 chain 腳手架與 env 槽，
+                                  #     但 collection/gacha 地址為 runtime 由 env 讀取、未 baked 進 production bundle，
+                                  #     抓不到任何可確認的 EVM 合約 → 視為未上線/實驗中，⚠️ 待查。
+payment_token_symbol: USDC        # docs 明示「餘額與回購 payout 皆以 USDC 計價」；前端引用標準 USDC mint
+
+ingest:
+  # ⚠️ 現有 ingest 管線（ingest_txs.py / tools/explorer.py）僅支援 EVM(Etherscan V2)。
+  #    Solana 需另接 SOLANA_API_KEY 供應商(本次驗證暫用公開 RPC)；from/to 用 slot 而非 block。
+  from_block:                     # ⚠️ Solana 用 slot；collection 建立 slot 待補
+  to_block: latest
+  batch_size: 1000
+
+contracts:
+  # Phygitals 鏈上未發現自訂的可執行 pack/marketplace program。
+  # 卡包開封與二級市場撮合走中心化後端（官網「即時 85-90% 回購」即為中心化操作），
+  # 鏈上僅以 MPL Core 資產轉移 + USDC 轉帳 + gasless fee-payer relayer 結算。
+  pack_opening: ""                # ⚠️ 無鏈上開包合約（後端撮合）；如需可由 fee-payer 簽署的交易反推
+  marketplace: ""                 # ⚠️ 無鏈上市場合約（後端 orderbook + MPL Core 轉移結算）
+  staking: ""                     # 無
+  token: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v   # 標準 USDC mint（Solana，6 decimals）— 平台付款/回購幣
+  nft:                              # 第二代卡片：MPL Core（2026-03-13 起）
+    - phygZDQZJZVHvJGYPGoKPYUtXw7mstSYtTtcuh8LJcC        # MPL Core Collection「Phygitals」(owner=Metaplex Core CoREENxT…)；
+                                                          # 已 mint 41,686 / current_size 41,669（2026-06-16 查）；
+                                                          # updateAuthority=6gn64…HeY4S；metadata uri 走 Crossmint(myfilebase ipfs)
+  cnft:                             # 第一代卡片：compressed NFT（Bubblegum，2025 期；2026-03 遷移到上面 MPL Core，大量 BURN）
+    # collection BSG6Dy 為 cNFT collection；transfer/burn 在各 tree 端點、mint 也在 tree 端點。
+    # 由 ingest_solana_cnft.py 走 Helius Enhanced API（以 tree 位址分頁）解析 → mints/nft_transfers(contract=BSG6Dy)。
+    - collection: BSG6DyEihFFtfvxtL9mKYsvTwiZXB1rq5gARMTJC2xAM   # cNFT collection「Phygitals」(2025 期 Pokemon 等實體卡)
+      trees:
+        - hAsrSYBkzdaz4r3EJ6pwxNL1YbGbM5c1jNuhLV6Uzqi           # 主 tree（持有量約 85%）
+        - BdAus7TTGJqS7b2o1vVt5EatEHAKPJA2skXdwUJhXxgF           # 次 tree（約 15%）
+
+deployers:
+  - 6gn64NNTDS4sNDfAq6Qk6cdgPeCWjupPbUVLfNSHeY4S        # MPL Core collection 的 updateAuthority；EOA(System)、3.03 SOL、2026-06-16 仍活動 → 平台控制錢包
+
+official_wallets:
+  # 證據分層(見 memory: solana-platform-wallet-evidence)：🔒密碼學 / 💪強 / 🆗中 / ⚠️弱(純行為推斷)
+  # ⚠️ 注意：fee_payer(mGrEw)是 gasless 通用 relayer，連「玩家」交易都代簽付 gas，
+  #         故「被 mGrEw 簽名」不能當作平台錢包的判別依據(實證會誤判)。
+  operations: 6gn64NNTDS4sNDfAq6Qk6cdgPeCWjupPbUVLfNSHeY4S   # 🔒 = collection updateAuthority(鏈上直讀)；付 NFT rent、不碰 USDC；由 62Q9 出資開帳
+  fee_payer: mGrEwYbMo98b6koTfy9pSfFJA1FZoxFxY7kjcsKf9C5     # 🔒 簽所有 mpl_core mint + 全平台 gas relayer；不碰 USDC；由 62Q9 出資開帳
+  treasury: ""                    # 角色未精分(cluster 內哪顆是金庫/buyback/deposit 待全量分群)
+  buyback: ""                     # 角色未精分；payout 行為最明顯者為 Fi5hNT8 / 8d56(各付給 90+ 個不同玩家)
+  claim: ""                       # NEXT_PUBLIC_CLAIM_ADDRESS env-only 未 baked，無法取得
+  # USDC 營運叢集 — ingest_solana 會抓這些的 USDC 金流 → payments 表。
+  # ✓ 封閉驗證(2026-06-18)：加入 8d56 後，與叢集大量互動的非叢集錢包其「付給不同非叢集地址數」皆 ≤3
+  #   = 全為重度玩家/farmer，無漏掉的平台 hub → 叢集收斂。payments 全歷史 549,403 筆(2021-09→2026-06)。
+  # ✓ 敏感度：金流結論對下方⚠️弱證 5 顆不敏感(納入 vs 排除差 <3%)，量級結論穩健。
+  usdc_cluster:
+    # -- 強/中證(funder 溯源 or 官方前端 bundle 引用) --
+    - 62Q9eeDY3eM8A5CnprBGYMPShdBjAzdpBdr71QHsS8dS          # 💪 出資開了 6gn64+mGrEw(funder) + 在官方 bundle；亦為鑄造 NFT(asset 2MSHZReG) owner
+    - 8d56BJgENF7v9A6YJnMinXqrQb7KKLxMhe3WmUf1Pa4N          # 💪 官方 bundle + payout hub(付給 91 個不同玩家/$27k)
+    - 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU          # 🆗 官方 bundle；USDC 量微($274)
+    - 6VhFyXwkgXmUdy2zNJUSBg5uDat9GTXyPjcCrY8n9DbA          # 🆗 官方 bundle；USDC 量微($745)；與 62Q9 同 funder(52i9…)
+    # -- 中證(行為=payout hub，但不在 bundle) --
+    - Fi5hNT89iLtifKKyoNa6gDhQU5Az8zZ6bM65fSo82Ar1          # 🤔 payout hub(付給 93 個不同玩家)，行為同已確認的 8d56；但不在 bundle
+    # -- 弱證(純推斷：只與已確認錢包大量循環、幾無外部往來、不在 bundle、funder 各異) --
+    - 5SWGkfFHWitcLSV23EL5eyw4YSNnTYceugJz4TScmuam          # ⚠️ 收多付少(out_cp 1)；疑內部歸集/金庫；待 Arkham/Solscan 標籤核
+    - FuhchUraFkdRfdysVLi5d8vB9YgRWAbnkyGLYAMVhe3t          # ⚠️ USDC 樞紐(in 206/out 94，但 distinct 對手方少)
+    - 2AyUvtafCjU9HcoQogZqu7gndXaKSd4ivSRQeLHbX4TC          # ⚠️ USDC 樞紐(distinct 對手方少)
+    - Gg8uoC2FpjLGBSeA6r8onLFDdc5ia81PSbB8LRjYR1xN          # ⚠️ USDC 樞紐(distinct 對手方少)
+
+infrastructure_addresses:         # 非平台金流、分群時應排除的基礎設施 program/服務
+  - CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d         # Metaplex Core（NFT 標準 program）
+  - TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA         # SPL Token program
+  - ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL         # Associated Token Account program
+  # 另：embedded wallet 用 Privy(NEXT_PUBLIC_PRIVY_APP_ID)、鑄造走 Crossmint —— 皆為服務商，非鏈上地址
+
+# 與本平台相關但非付款幣的代幣（社群/合作幣，分析時勿當作平台金流）：
+related_tokens:
+  - mint: HcrWkcgVMuS9D6vS6WfjynKuH7ud4ZykB7ASq2dyN4ks   # PIKA CAPITAL (PIKA)；前端 bundle 變數誤標為 "USDC_MINT"，實為社群幣(6 dec)
+  - mint: EebvSxfGbjyHMJ2bu1jhtNidbhVbQJtcg9y561Kipump   # Charizard Capital (ZARD)；pump.fun meme 幣
+  # 注意：前端 minified bundle 的變數標籤不可信（USDC↔USDT↔ZARD 互相錯標），一律以鏈上 metadata 為準
+
+# 分析閾值（每個平台可微調）
+thresholds:
+  bot_interval_cv: 0.35            # C1 開包間隔變異係數閾值
+  cluster_min_size: 3             # C2 同 funder 最小成員數
+  fast_dump_seconds: 600          # C3 收到後多久內視為快拋
+  wash_price_deviation: 0.4       # D3 偏離中位數比例
+  cycle_max_hops: 5               # D2 環狀檢測跳數
+
+# 報告產出設定
+report:
+  output_dir: .                   # 相對 platforms/<name>/ 的輸出位置
+  include_charts: true
+
+# --- 鏈上驗證備註（更新 2026-06-18）---
+# 來源：官網/docs 為 SPA 未露地址；地址由 Next.js 前端 JS chunk(230 個) 反查 + Solana 公開 RPC + Solscan Pro v2 驗證。
+# 鏈別：Solana（官網/docs/實際 baked 設定皆為 Solana；EVM 僅前端腳手架，未確認上線）。
+# 付款幣：USDC（docs 明示；標準 USDC mint EPjFW…Dt1v）。
+# NFT：MPL Core 單一 collection phygZ…（name="Phygitals"，41,686 minted）。
+# 程式：無自訂 pack/marketplace program → 撮合/回購為中心化後端，鏈上以 MPL Core + USDC 結算。
+# 權限/部署：collection updateAuthority = 6gn64…HeY4S。
+#
+# ingest 現況：ingest_solana.py + tools/solscan.py 已實作並完成全量 payments ingest。
+#   payments = 549,403 筆（全歷史 2021-09→2026-06）。金流分腿：
+#     玩家→平台(開包/儲值) $12.4M / 6,528 玩家；平台→玩家(buyback) $13.9M / 9,295 玩家；平台內部 $4.7M。
+#   official_wallets 叢集已封閉驗證(無漏掉的平台 hub)，信心分層見上(🔒/💪/🆗/⚠️)。
+# NFT 面(卡片) — 兩個世代：
+#  1) MPL Core(phygZ，2026-03 起)：ingest_solana_nft.py(Helius RPC 並發單筆) 解 mpl_core 指令。
+#     disc20=createV2(mint)、disc14=transferV1；asset=acc[0]/collection=[1]/to=[4]；from 用 SQL LAG。
+#     ✓ 全量：nft_transfers=849,450 / mints=42,279 / 31,655 卡。
+#  2) cNFT(BSG6Dy，2024-04 起，第一代)：ingest_solana_cnft.py(Helius Enhanced API，以 tree 分頁)。
+#     events.compressed[] 直接給 from(oldLeafOwner)/to(newLeafOwner)/assetId/type；2 棵 tree(hAsr/BdAus)。
+#     ✓ 全量：nft_transfers=1,695,318 / mints=1,287,798 / burn 43,966(遷移/贖回，記 marketplace='burn')。
+#     ⚠️ 坑：Enhanced API 中途會回短頁，勿用 len<100 當到底(只有 ok 且真空才停)，否則漏抓早期。
+#  全表合計：nft_transfers=2,544,768(PK 全唯一) / mints=1,330,077；全期賣回率 94%(發卡102萬/賣回96萬)。
+#  cNFT(2024-04)比 payments 平台金流(2025-03)早約一年；MPL Core 與 cNFT 並行，非純先後遷移。
+#  當前持有快照另可用 DAS getAssetsByGroup(collection) ~48s。
+# 仍待辦(⚠️)：
+#   1. cluster 內角色精分(treasury/buyback/deposit) + 弱證 5 顆用 Arkham 標籤排除 CEX/做市商。
+#   2. claim 地址(env-only 未 baked) 無法取得；EVM(Arbitrum/AnimeChain) 是否真上線未確認。
+# === wash farming 鐵證(全期 join payments↔nft_transfers) ===
+# 平台發卡 430,854 vs 玩家賣回 417,459 → 97% 卡片發出即賣回平台,鑽 85-90% 回購刷量(非真實收藏)。
+# top 玩家賣/收比≈1.00:8tkjit94 收21591/賣21596/付$699k、A4oVsxzQ 收6166/賣6077/付$0(疑餘額路由)。

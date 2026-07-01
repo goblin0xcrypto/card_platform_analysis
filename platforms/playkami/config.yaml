@@ -1,0 +1,36 @@
+platform: playkami
+chain: monad                      # 由 verifier.playkami.io 確認：Monad blockchain (EVM L1)
+launch_block: 39115220                   # TBD — 等合約公開後填
+payment_token_symbol: USDC
+ingest:
+  from_block: 39115220
+  to_block: latest
+  batch_size: 5000
+contracts:
+  pack_opening: 0x7ef90Ba0D6C3A46c813d8ABE02ae5116B72309fE               # 未公開
+  marketplace: ''                 # 平台有自有市場（90% sellback），合約未公開
+  staking: ''                     # 有 Points / Rewards 系統，是否為合約待查
+  token: 0x754704bc059f8c67012fed69bc8a327a5aafb603                       # 平台積分為 off-chain 還是 on-chain 待查
+  nft: [0xc2d57443f061b4490b1e588f3009d6357e6ad062]                         # 卡牌 NFT 合約未公開（Pokemon / One Piece / Mixed）
+deployers: [0xee0d642e9a11ec928f43c6ff26733a40223c792a]                     # 未公開
+infrastructure_addresses:
+  - 0x63c0c19a282a1b52b07dd5a65b58948a07dae32b   # 已知 smart wallet implementation
+official_wallets:
+  treasury: ''
+  operations: 0xee0d642e9a11ec928f43c6ff26733a40223c792a
+  airdrop: ''
+thresholds:
+  bot_interval_cv: 0.35
+  cluster_min_size: 3
+  fast_dump_seconds: 600
+  wash_price_deviation: 0.4
+  cycle_max_hops: 5
+report:
+  output_dir: .
+  include_charts: true
+
+# --- bootstrap 備註 ---
+# 自動偵測：bootstrap.py 因 SPA 抓不到內容，鏈別由人工分析 verifier.playkami.io 確認
+# 平台狀態：APP COMING SOON（pre-launch），鏈上合約可能尚未部署或未公開
+# 付款幣：USDC（透過 Privy embedded wallet）
+# 待補：等合約公開後從 Monad explorer 反查 pack_opening、nft、deployer

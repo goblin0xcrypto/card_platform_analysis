@@ -1,0 +1,54 @@
+platform: mnstr
+chain: MegaETH                    # MegaETH L2 (chainId 6342, explorer https://mega.etherscan.io)
+launch_block: 13479410            # CardMarketplace 部署區塊（最早）
+
+ingest:
+  from_block: 13479410
+  to_block: latest
+  batch_size: 5000
+
+payment_token_symbol: USDm        # 分析報告顯示用；ingest 不靠這個
+
+contracts:
+  # 三個 OffchainGacha 開包合約（同一 deployer 部署，付款幣為 USDm）
+  pack_opening:
+    - 0xdEa1D72f08D83e36946128603d4cD0A180A938A9   # Starter pack ($50)
+    - 0x6A786932b1cA83E2343B85483101C5B820860AC4   # Premium pack ($250)
+    - 0xebB285B5cd4610D0f6dc538379A7027F02274ca2   # Ultra pack ($1250)
+  marketplace: 0x5DB1075782527E5dDAcfdD816eA0c59B8C6EaaD3   # CardMarketplace（買/賣/出價/sellback/redeem）
+  token: 0xfafddbb3fc7688494971a79cc65dca3ef82079e7        # USDm (MegaUSD) ERC-20，平台唯一付款幣
+  nft: []                                                   # 無鏈上 NFT 合約：卡片以 off-chain cert number 追蹤，gacha 為 OffchainGacha 設計
+
+# 基礎設施 / smart wallet implementation 合約，funder cluster 要把這些排除
+# 避免「所有用戶都來自 Privy / Coinbase Smart Wallet 工廠」造成假群聚
+infrastructure_addresses: []        # mnstr 用 Privy embedded wallet，待補實際 factory 地址
+
+deployers:
+  - 0x61fccfC0279b09c387608eff56fd9187e61d2874     # 4 個合約（3 packs + marketplace）的部署者，亦為各合約 owner/paymentWallet
+
+official_wallets:
+  treasury: 0x61fccfC0279b09c387608eff56fd9187e61d2874     # paymentWallet：所有 USDm 收款流向此地址
+  operations: 0x61fccfC0279b09c387608eff56fd9187e61d2874   # 同 deployer/owner
+  safe: 0x7fc8d4b747dac14b68bee79d93c7130257c98a62         # 部署於 2026-04-29 的 SafeProxy multisig，treasury 透過此提現 $410k
+  operator: 0x6aaca9512ef1da6c410379dd9eff8abb15d6288b     # Safe 的部署者 EOA；接 Safe 出來的 $234k，續送 $204k 給 payment router 出場
+  airdrop: ''                                              # 尚未發現獨立 airdrop 錢包
+
+thresholds:
+  bot_interval_cv: 0.35
+  cluster_min_size: 3
+  fast_dump_seconds: 600
+  wash_price_deviation: 0.4
+  cycle_max_hops: 5
+
+report:
+  output_dir: .
+  include_charts: true
+
+# --- 偵測備註 ---
+# 平台：Monster Strategy（MnStr）— Onchain Pokémon Card Treasury，付款幣 USDm
+# 三個 OffchainGacha 合約皆 verified，constructor 僅吃 _usdcToken（即 USDm）地址
+# 合約功能：play()/playBulk()、grantFreePlayCredits()、claimAndRedeem()、setEntryPrice()
+# 事件：GachaPlayed、NFTRedeemed、NFTSoldBack — 但無對應 ERC-721/1155 合約，redeem 透過 admin 鏈下執行
+# 市場：CardMarketplace 以 string-based certificate number 管理庫存，非標準 NFT 標準
+# 部署者、owner、paymentWallet 三者皆為 0x61fccfC0279b09c387608eff56fd9187e61d2874（EOA，非多簽）
+# Buyback rate：starter pack 顯示 87%（網站文案說 85%）

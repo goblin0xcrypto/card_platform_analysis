@@ -1,0 +1,38 @@
+# 平台分析設定檔模板
+# 複製此檔到 platforms/<new_platform>/config.yaml 後填寫
+
+platform: REPLACE_ME              # 平台名稱（kebab-case）
+chain:                    # ethereum / base / arbitrum / solana / ton / sui ...
+payment_token_symbol:         # 分析報告顯示用，例如 USDC / USDm / USDT
+ingest:
+  from_block: 
+  to_block: 
+  batch_size: 
+contracts:
+  pack_opening: ""                # 開包合約
+  marketplace: ""                 # 市場合約（可選）
+  staking: ""                     # 質押合約（可選）
+  token: ""                       # 代幣合約（可選）
+  nft: []                         # NFT 合約清單
+
+deployers:
+  - ""                            # 主 deployer
+official_wallets:
+  treasury: ""
+  operations: ""
+  airdrop: ""
+
+infrastructure_addresses: []      # Privy / Coinbase Smart Wallet 等 factory，funder cluster 會排除
+
+# 分析閾值（每個平台可微調）
+thresholds:
+  bot_interval_cv: 0.35            # C1 開包間隔變異係數閾值
+  cluster_min_size: 3             # C2 同 funder 最小成員數
+  fast_dump_seconds: 600          # C3 收到後多久內視為快拋
+  wash_price_deviation: 0.4       # D3 偏離中位數比例
+  cycle_max_hops: 5               # D2 環狀檢測跳數
+
+# 報告產出設定
+report:
+  output_dir: .                   # 相對 platforms/<name>/ 的輸出位置
+  include_charts: true

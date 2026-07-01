@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: card-analysis-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: card_platform_analysis
+      POSTGRES_USER: analyst
+      POSTGRES_PASSWORD: analyst_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./schema/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analyst -d card_platform_analysis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pg_data:

@@ -1,0 +1,75 @@
+platform: renaiss                 # Renaiss — Collectible Finance Network（PSA/BGS 評級卡 gacha + 市場），官網 https://www.renaiss.xyz/
+chain: bsc                         # BNB Smart Chain（chainId 56）；6 個合約皆由同一 deployer 部署
+launch_block: 66766142            # 最早部署的合約（ERC-721 卡牌 0xf864）部署區塊
+
+ingest:
+  from_block: 66766142
+  to_block: latest
+  batch_size: 5000
+
+payment_token_symbol: USDT        # 平台唯一付款幣（鏈上付款金額均為 BSC USDT）
+
+contracts:
+  # 開包（gacha）合約 — 皆為 ERC-1967 可升級代理，各自獨立 implementation，同一 deployer 部署。
+  # 定價由鏈上「付進合約的 USDT 金額」反推（bulk 購買的整數倍佐證單價）；
+  # 付出的奇數金額為開出卡片的回購 payout，非定價。
+  pack_opening:
+    - 0xaab5f5fa75437a6e9e7004c12c9c56cda4b4885a   # 最早的開包合約（block 66766326，2025-11 上線）；曾調漲價格 $60(2025-11~2026-01)→ $100(2026-02 起)，另見少量 $125；官網現未列
+    - 0x94e7732b0b2e7c51ffd0d56580067d9c2e2b7910   # OMEGA $48（480=10×48、240=5×48）
+    - 0xb2891022648c5fad3721c42c05d8d283d4d53080   # RenaCrypt Pack $88（440=5×88）
+    - 0xfda4a907d23d9f24271bc47483c5b983831e325e   # Eden Pack $150（750=5×150、1500=10×150；最新部署）
+  marketplace: 0xae3e7268ef5a062946216a44f58a8f685ffd11d0   # 二級市場（ERC-1967 代理，block 66867164）
+  staking: ""                     # 無質押；官網 Lending/Borrowing、Leaderboard 標示 coming soon
+  token: 0x55d398326f99059ff775485246999027b3197955          # BSC USDT（標準 ERC-20，平台唯一付款幣）
+  nft:
+    - 0xf8646a3ca093e97bb404c3b25e675c0394dd5b30   # 卡牌 NFT「Renaiss」ERC-721（block 66766142，平台最早部署；79k 轉移 / 4980 token_id；creator=deployer）
+    - 0x7D1B7dB704d722295fbAa284008f526634673DbF   # 卡牌 NFT，ERC-1155（supportsInterface 0xd9b67a26=true、721=false）；owner()=deployer
+
+deployers:
+  - 0x12639a4147Af7c777bB9A21fdAEFA5ea91E2E3A3     # 7 個合約（4 packs + marketplace + 2 nft[721+1155]）全部的部署者；亦為 1155 NFT owner，797+ 筆交易
+official_wallets:
+  treasury: 0x2e7c38fd92cacab8f218cd529c2a3fe70b4201e9      # 金庫冷錢包：由 4 個 pack 合約整數撥入 $1.30M、付出 $0
+  operations: 0x12639a4147Af7c777bB9A21fdAEFA5ea91E2E3A3   # deployer / NFT owner，平台營運控制 EOA
+  liquidity: 0x9c84bd30a694cb2b0b3cc3810d621973bd3dab9d     # 營運 EOA：從 aab5 pack 收 $110k,再注資 Eden/aab5/marketplace
+  market_maker: 0x48fbb6eaa5f8ba3068562b7518b970b32ca7fa8e  # 團隊種子/做市合約：aab5 上線首日即開包、各 pack 上線日打整數種子($120k OMEGA/$40k RenaCrypt)、$27 測試;亦為二級市場最大買家。非真實玩家
+  airdrop: ""
+
+infrastructure_addresses: []      # Privy / Coinbase Smart Wallet 等 factory，funder cluster 會排除（待補實際地址）
+
+# 計算/分析時要排除的「非真實玩家」紀錄（原始資料仍完整保留在 raw_transactions）。
+# deriver(derive_from_raw.py)與營運儀表板(analyze_operations.py)皆會套用。
+exclude:
+  # 1) official_wallets 內所有地址自動排除(deriver 排除其開包、dashboard 排除其市場成交)
+  # 2) 正常售價皆為「整數美元」($60/$100/$125…及 bulk 倍數);以下兩條濾掉雜訊:
+  min_open_usd: 10        # 低於此美元金額視為 dust(如 $0.x/$1),不計入開包
+  drop_fractional: true   # 排除帶小數的金額(疑折扣碼/部分付款,非標準售價)
+  # 3) 特定 pack 的特定 USDT 付款金額(非正常售價:官方測試/協同事件/上線價)
+  pack_prices:
+    - pack: 0xaab5f5fa75437a6e9e7004c12c9c56cda4b4885a
+      prices: [27, 85]    # $27=官方 0x48fbb6 測試;$85=2026-02-27 約15分鐘內284地址同價(疑空投/sybil 協同),非正常售價
+    - pack: 0x94e7732b0b2e7c51ffd0d56580067d9c2e2b7910
+      prices: [100]       # OMEGA 上線價那批(2026-02-09~10,7,120筆/492玩家);3月起正常價為 $48
+
+# 分析閾值（每個平台可微調）
+thresholds:
+  bot_interval_cv: 0.35            # C1 開包間隔變異係數閾值
+  cluster_min_size: 3             # C2 同 funder 最小成員數
+  fast_dump_seconds: 600          # C3 收到後多久內視為快拋
+  wash_price_deviation: 0.4       # D3 偏離中位數比例
+  cycle_max_hops: 5               # D2 環狀檢測跳數
+
+# 報告產出設定
+report:
+  output_dir: .                   # 相對 platforms/<name>/ 的輸出位置
+  include_charts: true
+
+# --- 鏈上驗證備註（2026-06-07）---
+# 鏈別：BNB Chain（搜尋確認 + token 為 BSC 官方 USDT）
+# 7 合約皆同一 deployer（0x12639a…E2E3A3）部署 → 同一平台部署無誤；packs/marketplace 為 ERC-1967 代理
+# pack 單價由 USDT「incoming-to-pack」反推（全期間眾數）：
+#   0xaab5 = $60→$100（2026-02 起調漲）/ OMEGA $48 / RenaCrypt $88 / Eden $150
+#   OMEGA/RenaCrypt/Eden 對得上官網現有產品；0xaab5 為早期 pack、官網未列
+# NFT 有兩個：ERC-721「Renaiss」0xf864（最早部署、主要卡牌，79k 轉移）+ ERC-1155 0x7d1b（149k 轉移）
+#   0xf864 由「抓全量交易後反查 erc721 token 合約」發現，creator/supportsInterface 已驗證
+# 部署時間序：ERC721 nft(66766142) → 0xaab5 pack(66766326,$60→$100) → marketplace(66867164)
+#            → ERC1155 nft(71832307) → OMEGA(80171526) → RenaCrypt(83224334) → Eden(100551886)

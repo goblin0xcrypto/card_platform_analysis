@@ -1,0 +1,6 @@
+requests>=2.31
+PyYAML>=6.0
+web3>=7.0
+eth-utils>=4.0
+psycopg[binary]>=3.2
+matplotlib>=3.8
