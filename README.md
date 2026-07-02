@@ -6,32 +6,35 @@
 
 ```
 card_platform_analysis/
-├── playkami_analysis_sop.md   # 主 SOP 模板，所有分析以此為依據
-├── schema/
-│   └── init.sql               # Postgres 通用建表語句
-├── adapters/                  # 鏈別抓取適配器
-│   ├── base_adapter.py        # PlatformAdapter Protocol
-│   └── README.md              # 新增平台/鏈別說明
-├── queries/                   # 參數化 SQL 分析模組
-│   ├── platform_health.sql
-│   ├── deployer_flow.sql
-│   ├── bot_detection.sql
-│   ├── wash_trading.sql
-│   └── nft_endstate.sql
-├── shared/
-│   └── known_addresses.csv    # 跨平台共享地址字典 (CEX/Bridge/Mixer)
+├── ANALYSIS_SOP.md            # 主 SOP 模板，所有分析以此為依據（原 playkami_analysis_sop.md）
+├── schema/init.sql            # Postgres 通用建表語句
+│
+│   # --- ingest 腳本（依鏈別/合約選用，見 docs/data_pipeline.md）---
+├── ingest.py                  # EVM verified：adapter 解事件 → silver
+├── ingest_txs.py              # EVM：原始交易 → bronze raw_transactions
+├── derive_from_raw.py         # bronze → silver 推導（unverified 合約）
+├── ingest_solana.py           # Solana 付款金流（Solscan Pro v2）→ payments
+├── ingest_solana_nft.py       # Solana MPL Core NFT（Helius RPC）→ mints/nft_transfers
+├── ingest_solana_cnft.py      # Solana cNFT/Bubblegum（Helius Enhanced）→ mints/nft_transfers
+├── ingest_card_charts.py      # 卡片逐筆金額（平台公開價格頁）→ nft_transfers.amount_usd
+├── run_analysis.py            # 讀 silver → 分析 + 報告
+│
+├── adapters/                  # EVM 鏈別抓取適配器（base_adapter.py = Protocol）
+├── queries/                   # 參數化 SQL：platform_health / deployer_flow / bot_detection / wash_trading / nft_endstate
+├── shared/known_addresses.csv # 跨平台共享地址字典 (CEX/Bridge/Mixer)
 ├── platforms/
 │   ├── _template/             # 新平台複製這個資料夾
-│   └── playkami/              # 範例平台
+│   ├── playkami/ mnstr/ renaiss/   # EVM 範例平台
+│   └── phygitals/             # Solana 範例平台（MPL Core + cNFT + 逐筆金額）
 ├── docs/
 │   ├── data_pipeline.md       # ⭐ 各平台資料抓取→處理→寫庫流程 + 決策矩陣
 │   ├── clustering.md          # 同 funder 分群演算法
 │   └── report_template.md     # 統一報告模板
-├── tools/
-│   ├── bootstrap.py           # URL → 自動填 config.yaml + platform_profile.md
-│   └── README.md
-└── notebooks/
-    └── report.ipynb           # 自動產生報告 (placeholder)
+└── tools/
+    ├── bootstrap.py           # URL → 自動填 config.yaml + platform_profile.md
+    ├── explorer.py            # Etherscan V2 多鏈 client
+    ├── solscan.py             # Solscan Pro v2 client
+    └── README.md
 ```
 
 ## 新平台快速開始
@@ -47,10 +50,11 @@ edit platforms/<new_platform>/platform_profile.md
 # 3. 抓鏈上資料 —— 路徑依鏈別/合約而異，見決策矩陣 docs/data_pipeline.md
 #    EVM verified：  python ingest.py --platform <new_platform>
 #    EVM unverified：python ingest_txs.py --platform <new_platform> && python derive_from_raw.py --platform <new_platform>
-#    Solana：        python ingest_solana.py / ingest_solana_nft.py / ingest_solana_cnft.py --platform <new_platform>
+#    Solana：        ingest_solana.py（金流）+ ingest_solana_nft.py / ingest_solana_cnft.py（各世代卡片）
+#                    + ingest_card_charts.py（逐筆金額，金額不上鏈的平台）
 
 # 4. 跑分析
 python run_analysis.py --platform <new_platform>
 ```
 
-詳細流程請見 [playkami_analysis_sop.md](./playkami_analysis_sop.md)；**資料抓取路徑**見 [docs/data_pipeline.md](./docs/data_pipeline.md)，bootstrap 細節見 [tools/README.md](./tools/README.md)。
+詳細流程請見 [ANALYSIS_SOP.md](./ANALYSIS_SOP.md)；**資料抓取路徑**見 [docs/data_pipeline.md](./docs/data_pipeline.md)，bootstrap 細節見 [tools/README.md](./tools/README.md)。

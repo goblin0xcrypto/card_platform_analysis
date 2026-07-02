@@ -1,6 +1,6 @@
 # platforms/
 
-各卡牌/盲盒 NFT 平台的分析資料夾。每個子目錄是一個平台，所有平台共用同一套分析流程（見上層 [playkami_analysis_sop.md](../playkami_analysis_sop.md)）。新平台請複製 [`_template/`](./_template/)。
+各卡牌/盲盒 NFT 平台的分析資料夾。每個子目錄是一個平台，所有平台共用同一套分析流程（見上層 [ANALYSIS_SOP.md](../ANALYSIS_SOP.md)）。新平台請複製 [`_template/`](./_template/)。
 
 > **不同平台的資料抓取流程不一樣**（取決於鏈別與合約是否 verified）。全局架構與決策矩陣見
 > [docs/data_pipeline.md](../docs/data_pipeline.md)；單一平台的確切指令見各平台 README 的「資料抓取」段。

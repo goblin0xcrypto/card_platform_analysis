@@ -29,11 +29,16 @@
 # 3. 第一代卡片 cNFT / Bubblegum（2025 期，collection BSG6Dy，已大量遷移/BURN）→ mints / nft_transfers
 .venv/bin/python ingest_solana_cnft.py --platform phygitals --days 0  # Helius Enhanced API（以 tree 分頁）
 
-# 4. 分析 → 報告
+# 4. 逐筆金額（卡片 ALT 估值）→ card_charts + 回填 nft_transfers.amount_usd
+.venv/bin/python ingest_card_charts.py --platform phygitals           # 公開端點 single-nft/chart（免登入、免費）
+#    交易金額不上鏈（內部餘額制）；用卡片頁的逐日 ALT 估值，依成交當天定價。
+
+# 5. 分析 → 報告
 .venv/bin/python run_analysis.py --platform phygitals
 ```
 
-- 資料源：Solscan Pro v2（`SOLANA_API_KEY`，付費，付款金流）＋ Helius（`HELIUS_API_KEY`，NFT 指令/事件）。
+- 資料源：Solscan Pro v2（`SOLANA_API_KEY`，付費，付款金流）＋ Helius（`HELIUS_API_KEY`，NFT 指令/事件）＋ phygitals 公開 API（`single-nft/chart`，逐筆金額，免登入）。
+- **逐筆金額**：`ingest_card_charts.py` 抓每張卡的逐日 ALT 估值（`/api/marketplace/single-nft/chart?address={token_id}`），依每筆 `block_time` 當天回填 `nft_transfers.amount_usd`。覆蓋率受限於「價格歷史僅回最近一年」＋「僅 ALT 有估值的卡」（全期 ~61%、近一年 ~97%）。⚠️ 這是**卡片實質估值 GMV**；機構常報的名目 GMV 用卡包售價(mint_price)、通常約 2 倍。`--from/--to` 可只補指定範圍、`--backfill-only` 只重算金額。
 - 注意：MPL Core 資產**不是 SPL token**，不會出現在 `ingest_solana.py` 的轉帳流，必須由 `ingest_solana_nft.py` 解 mpl_core 指令補抓；2025 期 cNFT 則由 `ingest_solana_cnft.py` 補抓。
 - 無鏈上市場合約（後端 orderbook + MPL Core 轉移結算），故無 marketplace_trades。
 - `--days N`（預設 7）抓近 N 天；`--days 0` 全量 genesis，靠 `ingest_cursors` 可中斷續跑。

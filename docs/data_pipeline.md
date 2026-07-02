@@ -15,7 +15,8 @@
 | 層 | 表 | 產生者 | 說明 |
 |----|----|--------|------|
 | **bronze（原始）** | `raw_transactions` | `ingest_txs.py` | 不解析 ABI，原樣存每個地址的 native/internal/ERC-20/721/1155 交易。給 unverified 合約用。 |
-| **silver（語意 domain）** | `pack_opens` `payments` `mints` `nft_transfers` `marketplace_trades` `marketplace_events` | `ingest.py`（EVM verified）/ `ingest_solana*.py`（Solana）/ `derive_from_raw.py`（由 bronze 推導） | 依行為分流的語意化事實，分析直接查這層。 |
+| **silver（語意 domain）** | `pack_opens` `payments` `mints` `nft_transfers`（含 `amount_usd`）`marketplace_trades` `marketplace_events` | `ingest.py`（EVM verified）/ `ingest_solana*.py`（Solana）/ `derive_from_raw.py`（由 bronze 推導） | 依行為分流的語意化事實，分析直接查這層。 |
+| **金額輔助** | `card_charts`（token_id→逐日估值）`ingest_cursors`（抓取游標） | `ingest_card_charts.py` / 各 Solana ingest | 卡片逐日 ALT 估值（回填 `nft_transfers.amount_usd`）；ingest 續跑游標。 |
 | **分析 / gold** | `bot_flags` `address_clusters` + 報告檔 | `run_analysis.py` | 讀 silver，跑分析模組，輸出到 `platforms/<name>/`。 |
 | **參考資料** | `platforms` `contracts` `addresses` `known_addresses` | 由 config 載入 / 共享字典 | 平台、合約、官方錢包、CEX/Bridge 字典。 |
 
@@ -30,8 +31,9 @@
 | Solana + 付款幣（USDC）金流 | Solscan 解析轉帳 → `payments` | `ingest_solana.py` |
 | Solana + **MPL Core** NFT（新世代卡） | Helius RPC 解 mpl_core 指令 → `mints`/`nft_transfers` | `ingest_solana_nft.py` |
 | Solana + **compressed NFT / cNFT**（舊世代卡，Bubblegum） | Helius Enhanced API 以 tree 分頁 → `mints`/`nft_transfers` | `ingest_solana_cnft.py` |
+| Solana + **卡片逐筆金額**（金額不上鏈，內部餘額制） | 平台公開卡片價格歷史 → `card_charts` + 回填 `nft_transfers.amount_usd` | `ingest_card_charts.py` |
 
-> 判斷依據是 `platforms/<name>/config.yaml` 的 `chain:` 與合約類型。Solana 平台常需多支併用（payments 一支、各世代 NFT 各一支）。
+> 判斷依據是 `platforms/<name>/config.yaml` 的 `chain:` 與合約類型。Solana 平台常需多支併用（payments 一支、各世代 NFT 各一支、逐筆金額一支）。
 
 ## 3. ingest 腳本一覽
 
@@ -43,6 +45,7 @@
 | `ingest_solana.py` | Solana | Solscan Pro v2（`SOLANA_API_KEY`，付費） | payments（+ SPL NFT，需 `--spl-nft`） | 解 `/account/transfer`：付款幣 mint→payments。SPL NFT 需加 `--spl-nft`（預設關）。**抓不到 MPL Core**（非 SPL token，需 `ingest_solana_nft.py`）。 |
 | `ingest_solana_nft.py` | Solana | Helius RPC（`HELIUS_API_KEY`，免費並發單筆） | mints / nft_transfers | 解 MPL Core `createV2`/`transferV1` 指令。`from` 由 SQL LAG 補。 |
 | `ingest_solana_cnft.py` | Solana | Helius Enhanced API（`HELIUS_API_KEY`） | mints / nft_transfers | 解 Bubblegum cNFT，**以各 merkle tree 位址分頁**；from/to 直接有。 |
+| `ingest_card_charts.py` | Solana（金額層） | 平台公開 API `marketplace/single-nft/chart`（免登入、免費） | `card_charts` + 回填 `nft_transfers.amount_usd` | 金額不上鏈；抓每張卡逐日 ALT 估值，依成交當天定價。`--from/--to` 限範圍、`--backfill-only` 只重算。覆蓋率受限「價格歷史僅近一年」＋「僅 ALT 有估值的卡」（全期 ~61%）。**實質估值 GMV**，與機構名目 GMV（卡包售價）約差 2 倍。 |
 
 ## 4. 環境變數（`.env`，由 `.env.example` 複製）
 

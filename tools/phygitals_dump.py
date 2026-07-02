@@ -1,4 +1,7 @@
 """
+[探索輔助工具，非資料管線] — 登入後 dump 平台已知端點、找收款/設定地址，一次性偵察用。
+  本檔產物：確認收款錢包 vmNftOwner/vmBuyback 皆 62Q9、solanaFeePayer=mGrEw（全站單一、不分卡包）。
+
 phygitals_dump.py — 用「已登入的瀏覽器 session」直接抓 phygitals 後端關鍵端點，找收款地址。
 
 比 passive 側錄可靠：Playwright 同步模式在 time.sleep 迴圈不派發事件，會漏抓；這裡改用

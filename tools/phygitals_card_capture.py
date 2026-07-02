@@ -1,4 +1,8 @@
 """
+[探索輔助工具，非資料管線] — 用來「找出某頁面背後的 API 端點」，一次性偵察用。
+  正式抓取請用 ingest_card_charts.py（逐筆金額）等管線腳本。本檔的產物：發現了
+  /api/marketplace/single-nft/chart 這個公開價格歷史端點（已被 ingest_card_charts.py 採用）。
+
 phygitals_card_capture.py — 攔卡片詳情頁載入時打的 API，找「價格歷史」端點。
 
 用 networkidle 等待(事件會正確派發,不用 sleep 迴圈)。開卡片頁 → 記錄所有 api.phygitals.com

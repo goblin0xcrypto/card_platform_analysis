@@ -1,6 +1,6 @@
 # 卡牌平台鏈上分析 SOP（模板）
 
-> 本文件為通用 SOP 模板，命名沿用 `playkami_analysis_sop.md`。
+> 本文件為通用 SOP 模板（原名 `playkami_analysis_sop.md`，2026-07 更名為 `ANALYSIS_SOP.md`）。
 > 分析新平台時，複製整個 `platforms/<name>/` 子目錄並依本 SOP 填寫各章節輸出物。
 
 ---
