@@ -72,10 +72,21 @@ def derive_payments(conn, pid: int, cfg: dict) -> None:
     with conn.cursor() as c:
         c.execute("DELETE FROM payments WHERE platform_id=%s", (pid,))
         c.execute("""
-            WITH u AS (
-                SELECT DISTINCT tx_hash, block_number, block_time, from_addr, to_addr, value_raw
+            WITH ranked AS (
+                -- 同一 tx 內同一 (from,to,value) 的第 N 次出現;跨 address 串流重複捕捉的
+                -- 同一筆真實轉帳會落在同一個 rank,GROUP BY 後只留一列。但同一 tx 內「真的」
+                -- 出現兩次一樣金額的轉帳(如批次 payout 剛好同價)rank 不同,不會被誤刪。
+                SELECT tx_hash, block_number, block_time, from_addr, to_addr, value_raw,
+                       ROW_NUMBER() OVER (PARTITION BY address, tx_hash, from_addr, to_addr, value_raw
+                                          ORDER BY seq) AS rank_in_source
                 FROM raw_transactions
                 WHERE platform_id=%(pid)s AND kind='erc20' AND token=%(usdt)s
+            ),
+            u AS (
+                SELECT tx_hash, MAX(block_number) block_number, MAX(block_time) block_time,
+                       from_addr, to_addr, value_raw
+                FROM ranked
+                GROUP BY tx_hash, from_addr, to_addr, value_raw, rank_in_source
             ),
             r AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY tx_hash
                          ORDER BY from_addr,to_addr,value_raw)-1 AS li FROM u)
@@ -116,8 +127,11 @@ def derive_pack_opens(conn, pid: int, cfg: dict) -> None:
     with conn.cursor() as c:
         c.execute("DELETE FROM pack_opens WHERE platform_id=%s", (pid,))
         c.execute(f"""
-            WITH u AS (
-                SELECT DISTINCT tx_hash, block_number, block_time, from_addr, to_addr, value_raw
+            WITH ranked AS (
+                -- 同一 tx 內同一 (from,to,value) 的第 N 次出現(理由同 derive_payments)
+                SELECT tx_hash, block_number, block_time, from_addr, to_addr, value_raw,
+                       ROW_NUMBER() OVER (PARTITION BY address, tx_hash, from_addr, to_addr, value_raw
+                                          ORDER BY seq) AS rank_in_source
                 FROM raw_transactions
                 WHERE platform_id=%(pid)s AND kind='erc20' AND token=%(usdt)s
                   AND to_addr = ANY(%(packs)s)
@@ -128,6 +142,12 @@ def derive_pack_opens(conn, pid: int, cfg: dict) -> None:
                         SELECT 1 FROM unnest(%(epacks)s::text[], %(eraws)s::numeric[]) AS e(p, rw)
                         WHERE e.p = to_addr AND e.rw = value_raw
                   )
+            ),
+            u AS (
+                SELECT tx_hash, MAX(block_number) block_number, MAX(block_time) block_time,
+                       from_addr, to_addr, value_raw
+                FROM ranked
+                GROUP BY tx_hash, from_addr, to_addr, value_raw, rank_in_source
             ),
             r AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY tx_hash
                          ORDER BY from_addr,to_addr,value_raw)-1 AS li FROM u)

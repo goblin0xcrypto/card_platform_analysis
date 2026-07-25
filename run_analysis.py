@@ -152,17 +152,18 @@ def module_health(conn, ctx: Ctx) -> dict:
         out["daily_last14"] = c.fetchall()
 
         # FreePlay coverage gap：pack_opens 找不到同 tx 的 pack_pay = FreePlay 或補貼
+        # NOT EXISTS 相關子查詢可用 payments PK (platform_id,tx_hash,log_index) 索引，
+        # 比 NOT IN + CTE 的雜湊反連接在大資料量下快很多。
         c.execute("""
-            WITH pp AS (
-                SELECT DISTINCT tx_hash FROM payments
-                WHERE platform_id=%s AND direction='pack_pay'
-            )
             SELECT
-              COUNT(*) FILTER (WHERE po.tx_hash NOT IN (SELECT tx_hash FROM pp))
-                  AS freeplay_opens,
+              COUNT(*) FILTER (WHERE NOT EXISTS (
+                  SELECT 1 FROM payments p
+                  WHERE p.platform_id=po.platform_id AND p.tx_hash=po.tx_hash
+                    AND p.direction='pack_pay'
+              )) AS freeplay_opens,
               COUNT(*) AS total_opens
             FROM pack_opens po WHERE po.platform_id=%s
-        """, (ctx.pid, ctx.pid))
+        """, (ctx.pid,))
         fp, tot = c.fetchone()
         out["freeplay_opens"] = fp or 0
         out["freeplay_pct"] = (fp / tot * 100) if tot else 0.0

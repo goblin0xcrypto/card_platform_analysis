@@ -99,10 +99,24 @@ class EtherscanV2Client:
 
         seen: set = set()
         cursor = start_block
+        retries = 0
         while cursor <= end_block:
             data = self._call({**base, "startblock": cursor, "endblock": end_block})
             result = data.get("result")
-            if not isinstance(result, list) or not result:
+            if not isinstance(result, list):
+                msg = f"{data.get('message')}: {data.get('result')}"
+                # Etherscan 對大 collection 的「asc + 非零 startblock」查詢會 Query
+                # Timeout（desc 同範圍卻正常）→ 改用 desc 視窗從 end_block 往回掃。
+                if "timeout" in msg.lower():
+                    yield from self._paginate_desc(base, cursor, end_block, seen)
+                    return
+                if "rate limit" in msg.lower() and retries < 5:
+                    retries += 1
+                    time.sleep(2 ** retries)
+                    continue
+                raise RuntimeError(f"etherscan {base['action']}: {msg}")
+            retries = 0
+            if not result:
                 return
             last_block = cursor
             for row in result:
@@ -119,6 +133,42 @@ class EtherscanV2Client:
             # 取滿 10 000 → 推進 window。邊界 block 重疊由 seen 去重；
             # 若單一 block 就 >10000 筆（last==cursor）只能 +1 推進（極罕見）。
             cursor = last_block if last_block > cursor else last_block + 1
+
+    def _paginate_desc(self, base: dict, start_block: int, end_block: int,
+                       seen: set) -> Iterator[dict]:
+        """asc 查詢 Query Timeout 時的後備：sort=desc 從 end_block 往回掃到
+        start_block。回傳列為區塊遞減序（同 tx 內多筆轉移的 seq 順序會與 asc
+        相反，但只在 asc 完全抓不到資料時才會走到這裡）。"""
+        cursor_end = end_block
+        retries = 0
+        while cursor_end >= start_block:
+            data = self._call({**base, "sort": "desc",
+                               "startblock": start_block, "endblock": cursor_end})
+            result = data.get("result")
+            if not isinstance(result, list):
+                msg = f"{data.get('message')}: {data.get('result')}"
+                # timeout 在 desc 模式下多為暫時性負載，重試同一 window 即可
+                if ("rate limit" in msg.lower() or "timeout" in msg.lower()) and retries < 5:
+                    retries += 1
+                    time.sleep(2 ** retries)
+                    continue
+                raise RuntimeError(f"etherscan {base['action']} (desc fallback): {msg}")
+            retries = 0
+            if not result:
+                return
+            first_block = cursor_end
+            for row in result:
+                first_block = int(row["blockNumber"])
+                key = (row.get("hash"), row.get("from"), row.get("to"),
+                       row.get("value"), row.get("contractAddress"),
+                       row.get("tokenID"), row.get("traceId"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                yield row
+            if len(result) < 10000:
+                return
+            cursor_end = first_block if first_block < cursor_end else first_block - 1
 
     def txlist(self, address: str, start_block: int = 0,
                end_block: int = 999999999) -> Iterator[TxRecord]:
@@ -196,6 +246,7 @@ class EtherscanV2Client:
         so callers always see the full range.
         """
         cursor = from_block
+        retries = 0
         while cursor <= to_block:
             page = 1
             last_block: Optional[int] = None
@@ -215,7 +266,15 @@ class EtherscanV2Client:
                         params[f"topic0_{i}_opr"] = "and"
                 data = self._call(params)
                 result = data.get("result")
-                if not isinstance(result, list) or not result:
+                if not isinstance(result, list):
+                    msg = f"{data.get('message')}: {data.get('result')}"
+                    if ("rate limit" in msg.lower() or "timeout" in msg.lower()) and retries < 5:
+                        retries += 1
+                        time.sleep(2 ** retries)
+                        continue
+                    raise RuntimeError(f"etherscan getLogs: {msg}")
+                retries = 0
+                if not result:
                     return
                 for r in result:
                     yield r
